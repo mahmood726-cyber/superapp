@@ -1,0 +1,34 @@
+{
+  "name": "meta-analysis-superapp",
+  "version": "1.0.0",
+  "description": "Comprehensive meta-analysis platform with advanced statistical methods",
+  "type": "module",
+  "main": "js/engine/advanced-methods.js",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./jest.config.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./jest.config.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./jest.config.js --coverage",
+    "test:verbose": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config ./jest.config.js --verbose",
+    "validate:r": "Rscript validation/r_benchmark_validation.R"
+  },
+  "keywords": [
+    "meta-analysis",
+    "network-meta-analysis",
+    "statistics",
+    "bayesian",
+    "publication-bias",
+    "dta",
+    "diagnostic-test-accuracy"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "babel-jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

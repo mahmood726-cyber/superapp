@@ -1,0 +1,33 @@
+{
+  "description": "Simulated DTA data (10 studies)",
+  "tp": [90, 55, 66, 103, 56, 81, 115, 125, 66, 128],
+  "fp": [16, 4, 47, 30, 36, 25, 39, 24, 79, 5],
+  "fn": [2, 9, 5, 4, 1, 4, 2, 10, 1, 13],
+  "tn": [280, 99, 230, 168, 240, 228, 174, 81, 154, 224],
+  "k": 10,
+  "true_params": {
+    "mu_sens": 2.5,
+    "mu_spec": 2,
+    "sigma2_sens": 0.3,
+    "sigma2_spec": 0.2,
+    "rho": -0.4
+  },
+  "reitsma": {
+    "sensitivity": {
+      "estimate": 0.9467,
+      "logit": 2.8777,
+      "logitSE": 0.2356
+    },
+    "specificity": {
+      "estimate": 0.883,
+      "logit": 2.0215,
+      "logitSE": 0.2922
+    },
+    "Psi": {
+      "sigma2_sens": 0.286,
+      "sigma2_spec": 0.7846,
+      "correlation": 0.684
+    },
+    "AUC": 0.9646
+  }
+}

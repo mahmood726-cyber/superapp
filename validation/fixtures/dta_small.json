@@ -1,0 +1,23 @@
+{
+  "description": "Small DTA meta-analysis (3 studies)",
+  "tp": [50, 48, 45],
+  "fp": [10, 12, 8],
+  "fn": [5, 7, 10],
+  "tn": [90, 88, 92],
+  "k": 3,
+  "reitsma": {
+    "sensitivity": {
+      "estimate": 0.8635,
+      "logit": 1.8446
+    },
+    "specificity": {
+      "estimate": 0.899,
+      "logit": 2.1865
+    },
+    "Psi": {
+      "sigma2_sens": 0.0237,
+      "sigma2_spec": 0.0047,
+      "correlation": 1
+    }
+  }
+}

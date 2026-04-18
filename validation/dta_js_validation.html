@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DTA Validation: JavaScript vs R (mada::reitsma)</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #1a1a2e; color: #eee; }
+        h1, h2 { color: #4CAF50; }
+        table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+        th, td { border: 1px solid #444; padding: 8px; text-align: right; }
+        th { background: #333; }
+        .pass { color: #4CAF50; font-weight: bold; }
+        .fail { color: #f44336; font-weight: bold; }
+        .warn { color: #ff9800; }
+        .dataset { background: #222; padding: 15px; margin: 20px 0; border-radius: 8px; }
+        .summary { background: #333; padding: 20px; border-radius: 8px; margin-top: 30px; }
+        .diff { color: #888; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <h1>DTA Meta-Analysis Validation</h1>
+    <p>Comparing JavaScript bivariateDTA() vs R mada::reitsma()</p>
+    <div id="results">Loading...</div>
+    <div id="summary" class="summary"></div>
+
+    <script type="module">
+        import { bivariateDTA, dtaLeaveOneOut } from '../js/engine/advanced-methods.js';
+
+        const resultsDiv = document.getElementById('results');
+        const summaryDiv = document.getElementById('summary');
+
+        // Fixtures from R mada::reitsma()
+        const fixtures = {
+            simulated: {
+                description: "Simulated DTA data (10 studies)",
+                tp: [90, 55, 66, 103, 56, 81, 115, 125, 66, 128],
+                fp: [16, 4, 47, 30, 36, 25, 39, 24, 79, 5],
+                fn: [2, 9, 5, 4, 1, 4, 2, 10, 1, 13],
+                tn: [280, 99, 230, 168, 240, 228, 174, 81, 154, 224],
+                reitsma: {
+                    sensitivity: 0.9467,
+                    specificity: 0.883,
+                    sigma2_sens: 0.286,
+                    sigma2_spec: 0.7846,
+                    correlation: 0.684,
+                    AUC: 0.9646
+                }
+            },
+            dementia: {
+                description: "Dementia screening (mada package)",
+                tp: [66, 118, 48, 134, 24, 68, 64, 282, 14, 262, 144, 184, 22, 112, 152, 30, 32, 10, 708, 182, 60, 74, 28, 40, 318, 388, 118, 44, 124, 26, 74, 38, 78],
+                fp: [240, 10, 64, 28, 44, 48, 0, 20, 44, 30, 30, 34, 152, 590, 126, 26, 4, 12, 1438, 18, 24, 16, 26, 76, 174, 16, 2, 34, 98, 4, 2, 0, 46],
+                fn: [4, 12, 20, 8, 6, 16, 18, 64, 2, 20, 18, 34, 0, 0, 82, 26, 6, 4, 88, 108, 30, 24, 12, 6, 52, 116, 66, 8, 46, 44, 32, 46, 34],
+                tn: [870, 110, 990, 152, 292, 154, 72, 286, 286, 178, 124, 52, 140, 2092, 1010, 236, 248, 334, 10448, 184, 74, 144, 210, 528, 578, 54, 44, 396, 310, 172, 226, 440, 376],
+                reitsma: {
+                    sensitivity: 0.7887,
+                    specificity: 0.8862,
+                    sigma2_sens: 0.6399,
+                    sigma2_spec: 0.8772,
+                    correlation: 0.5779,
+                    AUC: 0.9044
+                }
+            },
+            highHet: {
+                description: "High heterogeneity (15 studies)",
+                tp: [46, 36, 59, 44, 43, 45, 25, 62, 47, 28, 24, 44, 53, 21, 29],
+                fp: [42, 35, 24, 9, 5, 8, 21, 60, 7, 3, 23, 30, 32, 19, 3],
+                fn: [18, 22, 4, 4, 3, 3, 21, 29, 3, 22, 5, 7, 9, 19, 26],
+                tn: [54, 78, 58, 90, 77, 109, 83, 34, 76, 71, 21, 70, 30, 73, 145],
+                reitsma: {
+                    sensitivity: 0.8176,
+                    specificity: 0.8324,
+                    sigma2_sens: 0.2748,
+                    sigma2_spec: 0.4019,
+                    correlation: 0.7335,
+                    AUC: 0.8847
+                }
+            }
+        };
+
+        // Tolerances
+        const TOL = {
+            point: 0.02,      // 2% for sensitivity/specificity
+            variance: 0.10,   // 10% relative for variance components
+            correlation: 0.15, // 15% for correlation (very sensitive)
+            auc: 0.03         // 3% for AUC
+        };
+
+        function compare(js, r, tol, isRelative = false) {
+            if (isNaN(js) || js === null || js === undefined) return { pass: false, diff: 'N/A' };
+            const diff = isRelative ? Math.abs((js - r) / r) : Math.abs(js - r);
+            const pass = diff <= tol;
+            return { pass, diff: isRelative ? (diff * 100).toFixed(2) + '%' : diff.toFixed(4) };
+        }
+
+        function runValidation() {
+            let html = '';
+            let totalTests = 0, passedTests = 0;
+
+            for (const [key, data] of Object.entries(fixtures)) {
+                html += `<div class="dataset"><h2>${data.description}</h2>`;
+
+                try {
+                    // Run JavaScript bivariateDTA
+                    const jsResult = bivariateDTA(data.tp, data.fp, data.fn, data.tn);
+                    const rRef = data.reitsma;
+
+                    // Build comparison table
+                    html += `<table>
+                        <tr><th>Metric</th><th>R (mada)</th><th>JavaScript</th><th>Diff</th><th>Tol</th><th>Status</th></tr>`;
+
+                    // Sensitivity
+                    let c = compare(jsResult.sensitivity, rRef.sensitivity, TOL.point);
+                    totalTests++; if (c.pass) passedTests++;
+                    html += `<tr>
+                        <td>Sensitivity</td>
+                        <td>${rRef.sensitivity.toFixed(4)}</td>
+                        <td>${jsResult.sensitivity?.toFixed(4) || 'N/A'}</td>
+                        <td class="diff">${c.diff}</td>
+                        <td>${TOL.point}</td>
+                        <td class="${c.pass ? 'pass' : 'fail'}">${c.pass ? 'PASS' : 'FAIL'}</td>
+                    </tr>`;
+
+                    // Specificity
+                    c = compare(jsResult.specificity, rRef.specificity, TOL.point);
+                    totalTests++; if (c.pass) passedTests++;
+                    html += `<tr>
+                        <td>Specificity</td>
+                        <td>${rRef.specificity.toFixed(4)}</td>
+                        <td>${jsResult.specificity?.toFixed(4) || 'N/A'}</td>
+                        <td class="diff">${c.diff}</td>
+                        <td>${TOL.point}</td>
+                        <td class="${c.pass ? 'pass' : 'fail'}">${c.pass ? 'PASS' : 'FAIL'}</td>
+                    </tr>`;
+
+                    // Variance components (relative tolerance)
+                    if (jsResult.Psi) {
+                        c = compare(jsResult.Psi.sigma2_sens, rRef.sigma2_sens, TOL.variance, true);
+                        totalTests++; if (c.pass) passedTests++;
+                        html += `<tr>
+                            <td>σ²(sens)</td>
+                            <td>${rRef.sigma2_sens.toFixed(4)}</td>
+                            <td>${jsResult.Psi.sigma2_sens?.toFixed(4) || 'N/A'}</td>
+                            <td class="diff">${c.diff}</td>
+                            <td>${(TOL.variance*100)}%</td>
+                            <td class="${c.pass ? 'pass' : 'fail'}">${c.pass ? 'PASS' : 'FAIL'}</td>
+                        </tr>`;
+
+                        c = compare(jsResult.Psi.sigma2_spec, rRef.sigma2_spec, TOL.variance, true);
+                        totalTests++; if (c.pass) passedTests++;
+                        html += `<tr>
+                            <td>σ²(spec)</td>
+                            <td>${rRef.sigma2_spec.toFixed(4)}</td>
+                            <td>${jsResult.Psi.sigma2_spec?.toFixed(4) || 'N/A'}</td>
+                            <td class="diff">${c.diff}</td>
+                            <td>${(TOL.variance*100)}%</td>
+                            <td class="${c.pass ? 'pass' : 'fail'}">${c.pass ? 'PASS' : 'FAIL'}</td>
+                        </tr>`;
+
+                        c = compare(jsResult.Psi.correlation, rRef.correlation, TOL.correlation);
+                        totalTests++; if (c.pass) passedTests++;
+                        html += `<tr>
+                            <td>Correlation</td>
+                            <td>${rRef.correlation.toFixed(4)}</td>
+                            <td>${jsResult.Psi.correlation?.toFixed(4) || 'N/A'}</td>
+                            <td class="diff">${c.diff}</td>
+                            <td>${TOL.correlation}</td>
+                            <td class="${c.pass ? 'pass' : 'fail'}">${c.pass ? 'PASS' : 'FAIL'}</td>
+                        </tr>`;
+                    }
+
+                    // AUC
+                    c = compare(jsResult.AUC, rRef.AUC, TOL.auc);
+                    totalTests++; if (c.pass) passedTests++;
+                    html += `<tr>
+                        <td>AUC</td>
+                        <td>${rRef.AUC.toFixed(4)}</td>
+                        <td>${jsResult.AUC?.toFixed(4) || 'N/A'}</td>
+                        <td class="diff">${c.diff}</td>
+                        <td>${TOL.auc}</td>
+                        <td class="${c.pass ? 'pass' : 'fail'}">${c.pass ? 'PASS' : 'FAIL'}</td>
+                    </tr>`;
+
+                    html += `</table>`;
+
+                    // Test dtaLeaveOneOut
+                    try {
+                        const loo = dtaLeaveOneOut(data.tp, data.fp, data.fn, data.tn);
+                        if (loo && loo.results && loo.results.length === data.tp.length) {
+                            totalTests++; passedTests++;
+                            html += `<p class="pass">✓ dtaLeaveOneOut: ${loo.results.length} studies analyzed</p>`;
+                        } else {
+                            totalTests++;
+                            html += `<p class="fail">✗ dtaLeaveOneOut: unexpected result</p>`;
+                        }
+                    } catch (e) {
+                        totalTests++;
+                        html += `<p class="fail">✗ dtaLeaveOneOut: ${e.message}</p>`;
+                    }
+
+                } catch (e) {
+                    html += `<p class="fail">Error: ${e.message}</p>`;
+                }
+
+                html += `</div>`;
+            }
+
+            resultsDiv.innerHTML = html;
+
+            const passRate = ((passedTests / totalTests) * 100).toFixed(1);
+            summaryDiv.innerHTML = `
+                <h2>Validation Summary</h2>
+                <p><span class="pass">Passed:</span> ${passedTests} / ${totalTests} (${passRate}%)</p>
+                <p><span class="${passedTests === totalTests ? 'pass' : 'warn'}">
+                    ${passedTests === totalTests ? '✓ All tests passed!' : '⚠ Some tests need attention'}
+                </span></p>
+                <h3>Tolerance Levels:</h3>
+                <ul>
+                    <li>Point estimates (sens/spec): ±${TOL.point}</li>
+                    <li>Variance components: ±${(TOL.variance*100)}% relative</li>
+                    <li>Correlation: ±${TOL.correlation}</li>
+                    <li>AUC: ±${TOL.auc}</li>
+                </ul>
+            `;
+
+            // Output for automation
+            console.log('VALIDATION_RESULTS:', JSON.stringify({
+                passed: passedTests,
+                total: totalTests,
+                rate: passRate
+            }));
+        }
+
+        runValidation();
+    </script>
+</body>
+</html>

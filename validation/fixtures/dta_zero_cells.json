@@ -1,0 +1,24 @@
+{
+  "description": "DTA with zero cells (4 studies)",
+  "tp": [50, 0, 48, 45],
+  "fp": [5, 8, 6, 4],
+  "fn": [5, 50, 7, 10],
+  "tn": [95, 92, 94, 96],
+  "k": 4,
+  "note": "Study 2 has TP=0 (requires continuity correction)",
+  "reitsma": {
+    "sensitivity": {
+      "estimate": 0.6134,
+      "logit": 0.4617
+    },
+    "specificity": {
+      "estimate": 0.9385,
+      "logit": 2.7246
+    },
+    "Psi": {
+      "sigma2_sens": 8.0041,
+      "sigma2_spec": 0.046,
+      "correlation": -1
+    }
+  }
+}

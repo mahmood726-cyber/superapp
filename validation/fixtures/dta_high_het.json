@@ -1,0 +1,33 @@
+{
+  "description": "High heterogeneity DTA (15 studies)",
+  "tp": [70, 73, 40, 46, 58, 49, 62, 42, 60, 33, 31, 58, 51, 66, 44],
+  "fp": [3, 8, 69, 8, 16, 23, 24, 7, 11, 30, 50, 17, 23, 44, 6],
+  "fn": [28, 19, 2, 8, 9, 1, 8, 34, 29, 12, 4, 10, 9, 13, 19],
+  "tn": [50, 54, 49, 168, 85, 48, 114, 67, 73, 131, 29, 172, 147, 115, 107],
+  "k": 15,
+  "true_params": {
+    "mu_sens": 1.5,
+    "mu_spec": 1.8,
+    "sigma2_sens": 1,
+    "sigma2_spec": 0.8,
+    "rho": -0.6
+  },
+  "reitsma": {
+    "sensitivity": {
+      "estimate": 0.8176,
+      "logit": 1.5,
+      "logitSE": 0.1946
+    },
+    "specificity": {
+      "estimate": 0.8324,
+      "logit": 1.6031,
+      "logitSE": 0.2771
+    },
+    "Psi": {
+      "sigma2_sens": 0.4347,
+      "sigma2_spec": 1.0579,
+      "correlation": 0.7335
+    },
+    "AUC": 0.8847
+  }
+}
