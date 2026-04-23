@@ -73,6 +73,23 @@ class Router {
   }
 
   /**
+   * Backwards-compatible alias used throughout the app pages.
+   * @param {string} path
+   * @param {Object} options
+   */
+  push(path, options = {}) {
+    this.navigate(path, options);
+  }
+
+  /**
+   * Explicitly resolve the current route after routes/outlet are registered.
+   * Avoids depending on load/hashchange timing.
+   */
+  start() {
+    return this._handleRoute();
+  }
+
+  /**
    * Go back in history
    */
   back() {

@@ -661,6 +661,29 @@ function testInconsistency(network, design, d, tau2) {
 }
 
 /**
+ * Backwards-compatible node-splitting entry point for the UI layer.
+ * The page expects a flat array of comparison summaries.
+ */
+export function nodeSplitting(network, options = {}) {
+  const nma = runNMA(network, options);
+  const rawResults = nma?.inconsistency?.nodeSplitting;
+
+  if (!Array.isArray(rawResults)) {
+    return [];
+  }
+
+  return rawResults.map(result => ({
+    comparison: result.comparison,
+    direct: result.direct?.estimate ?? null,
+    indirect: result.indirect?.estimate ?? null,
+    difference: result.difference?.estimate ?? null,
+    p: result.difference?.p ?? null,
+    inconsistent: result.inconsistent ?? false,
+    hasIndirect: result.hasIndirect ?? false
+  }));
+}
+
+/**
  * Fit indirect model by excluding direct evidence between two treatments
  * This is the core of proper node-splitting
  */
@@ -1723,6 +1746,7 @@ export default {
   buildNetwork,
   createDesignMatrix,
   runNMA,
+  nodeSplitting,
   componentNMA,
   calculateSUCRA,
   getNetworkPlotData,

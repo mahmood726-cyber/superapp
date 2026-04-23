@@ -91,6 +91,10 @@ class Database {
   constructor() {
     this._db = null;
     this._ready = null;
+
+    for (const storeName of Object.keys(STORES)) {
+      this[storeName] = this._createStoreFacade(storeName);
+    }
   }
 
   /**
@@ -244,6 +248,28 @@ class Database {
   }
 
   /**
+   * Add a new record and return its primary key.
+   * Synthesizes IDs for stores that use a simple key path.
+   * @param {string} storeName
+   * @param {*} record
+   * @returns {Promise<*>}
+   */
+  async add(storeName, record) {
+    await this.init();
+
+    const prepared = await this._prepareRecordForAdd(storeName, record);
+
+    return new Promise((resolve, reject) => {
+      const tx = this._getTransaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      const request = store.add(prepared);
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
    * Delete a record by key
    * @param {string} storeName
    * @param {*} key
@@ -353,6 +379,55 @@ class Database {
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+  }
+
+  async _prepareRecordForAdd(storeName, record) {
+    const config = STORES[storeName];
+    if (!config || Array.isArray(config.keyPath)) {
+      return record;
+    }
+
+    const keyPath = config.keyPath;
+    if (record[keyPath] != null) {
+      return record;
+    }
+
+    const nextRecord = { ...record };
+    if (storeName === 'projects') {
+      const existing = await this.getAll(storeName);
+      const maxId = existing.reduce((max, item) => {
+        const value = Number(item?.[keyPath]);
+        return Number.isFinite(value) ? Math.max(max, value) : max;
+      }, 0);
+      nextRecord[keyPath] = maxId + 1;
+      return nextRecord;
+    }
+
+    nextRecord[keyPath] = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return nextRecord;
+  }
+
+  _createStoreFacade(storeName) {
+    return {
+      get: (key) => this.get(storeName, key),
+      getAll: () => this.getAll(storeName),
+      getAllByIndex: (indexName, value) => this.getAllByIndex(storeName, indexName, value),
+      add: (record) => this.add(storeName, record),
+      put: (record) => this.put(storeName, record),
+      delete: (key) => this.delete(storeName, key),
+      clear: () => this.clear(storeName),
+      count: () => this.count(storeName),
+      query: (fieldOrOptions, value) => {
+        if (typeof fieldOrOptions === 'string') {
+          return this.query(storeName, {
+            filter: (record) => record?.[fieldOrOptions] === value
+          });
+        }
+        return this.query(storeName, fieldOrOptions || {});
+      }
+    };
   }
 }
 

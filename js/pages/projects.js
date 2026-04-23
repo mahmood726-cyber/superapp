@@ -120,7 +120,7 @@ class ProjectsPage extends HTMLElement {
         // Also delete related records
         const records = await db.records.query('projectId', this._deleteConfirmId);
         for (const record of records) {
-          await db.records.delete(record.id);
+          await db.records.delete(record.nctId);
         }
 
         this._projects = this._projects.filter(p => p.id !== this._deleteConfirmId);

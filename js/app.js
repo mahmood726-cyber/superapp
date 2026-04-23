@@ -243,6 +243,9 @@ function setupRoutes() {
   router.afterEach(() => {
     hideLoading();
   });
+
+  // Resolve the initial route after the router is fully configured.
+  router.start();
 }
 
 /**
