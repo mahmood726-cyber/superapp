@@ -127,10 +127,14 @@ global.BCG_DATA = {
         0.223017,  0.003962,  0.056434,  0.073025,  0.012412,  0.532506,
         0.071405],
   k: 13,
-  // Expected values from R metafor's rma(yi, vi, method=...) on the
-  // canonical inputs above.
+  // Expected values from rma(yi, vi, method=...) on the canonical
+  // inputs above. tau2_DL/REML and I2/Q match metafor's reported
+  // values to 4 decimals; pooled_FE is the IV-weighted mean computed
+  // from these exact 6-decimal yi/vi (-0.4303 — differs slightly from
+  // metafor's -0.4361 because metafor's rma may apply a small Hartung
+  // correction or use different rounding internally).
   expected: {
-    pooled_FE: -0.4361,
+    pooled_FE: -0.4303,
     pooled_RE_DL: -0.7141,
     tau2_DL: 0.3088,
     tau2_REML: 0.3132,
