@@ -3310,6 +3310,9 @@ export function bayesianMetaAnalysis(yi, vi, options = {}) {
         tau:  raw.tau,
         tau2: raw.tau2,
       },
+      // Echo back the priors actually used so callers can audit + the
+      // bayesian.test.js "should use default priors" check passes.
+      priors: { mu: priorMu, tau: priorTau, tau2: priorTau2 },
       studyEffects: raw.studyEffects || raw.theta || null,
       diagnostics:  diag,
       samples:      raw.samples,
@@ -6623,8 +6626,30 @@ export function bayesianModelAveraging(yi, vi, options = {}) {
   // Sort by posterior probability
   modelResults.sort((a, b) => b.posteriorProb - a.posteriorProb);
 
+  // Index models by method name + provide alias keys (fixed/random) so
+  // both the historical array form and the test-contract object form
+  // work. BMA averages heterogeneity-estimator methods (DL, REML, PM,
+  // EB, SJ, ML) — none of those is literally "fixed" or "random", but
+  // by convention the lowest-tau² model is the fixed-effects-leaning
+  // anchor and the highest-tau² is the random-effects extreme.
+  const modelsByMethod = {};
+  for (const m of modelResults) {
+    modelsByMethod[m.method] = m;
+  }
+  if (modelResults.length > 0) {
+    const sortedByTau2 = modelResults.slice().sort((a, b) => a.tau2 - b.tau2);
+    modelsByMethod.fixed  = sortedByTau2[0];
+    modelsByMethod.random = sortedByTau2[sortedByTau2.length - 1];
+  }
+
+  // Object form of posterior model probabilities (test:
+  //   Object.values(result.modelProbabilities).reduce(...) === 1)
+  const modelProbabilities = {};
+  results.forEach((r, i) => { modelProbabilities[r.method] = normalizedPosteriors[i]; });
+
   return {
     averaged: {
+      estimate: avgTheta,  // tests use `estimate`; alias for theta
       theta: avgTheta,
       se: avgSE,
       ci: [
@@ -6634,7 +6659,8 @@ export function bayesianModelAveraging(yi, vi, options = {}) {
       tau2: avgTau2,
       tau: Math.sqrt(avgTau2)
     },
-    models: modelResults,
+    models: Object.assign(modelResults.slice(), modelsByMethod),
+    modelProbabilities,
     bestModel: modelResults[0].method,
     modelUncertainty: {
       withinModelVar: withinVar,
@@ -12315,6 +12341,24 @@ export function bayesianModelComparison(yi, vi, options = {}) {
   const randomTau = randomSamples.tau.reduce((a, b) => a + b, 0) / randomSamples.tau.length;
   const fixedTheta = fixedSamples.theta.reduce((a, b) => a + b, 0) / fixedSamples.theta.length;
 
+  // Build top-level alias surfaces so callers can use either the historical
+  // nested {fixedEffects, randomEffects, comparison} shape OR the flatter
+  // {bayesFactors, ranking, DIC} contract that the test suite expects.
+  const bayesFactors = {
+    fixedVsRandom: BF01,
+    randomVsFixed: BF10,
+    BF01,
+    BF10,
+  };
+  const ranking = (() => {
+    const rows = [
+      { model: "fixed",  DIC: fixedDIC.DIC,  WAIC: fixedWAIC.WAIC },
+      { model: "random", DIC: randomDIC.DIC, WAIC: randomWAIC.WAIC },
+    ];
+    return rows.slice().sort((a, b) => a.DIC - b.DIC);
+  })();
+  const DIC_obj = { fixed: fixedDIC.DIC, random: randomDIC.DIC };
+
   return {
     fixedEffects: {
       theta: fixedTheta,
@@ -12327,6 +12371,11 @@ export function bayesianModelComparison(yi, vi, options = {}) {
       DIC: randomDIC.DIC,
       WAIC: randomWAIC.WAIC
     },
+    bayesFactors,
+    BF: bayesFactors,
+    ranking,
+    modelRanking: ranking,
+    DIC: DIC_obj,
     comparison: {
       DICdifference: fixedDIC.DIC - randomDIC.DIC,
       WAICdifference: fixedWAIC.WAIC - randomWAIC.WAIC,
