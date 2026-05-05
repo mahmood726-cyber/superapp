@@ -96,17 +96,42 @@ global.TOLERANCES = {
   BOOTSTRAP: 0.05  // Bootstrap results (higher variance)
 };
 
-// Test data: BCG vaccine meta-analysis (classic dataset)
+// Test data: BCG vaccine meta-analysis (classic dataset).
+//
+// Source: metafor's `dat.bcg` (Colditz et al. 1994), then
+//   escalc(measure="RR", ai=tpos, bi=tneg, ci=cpos, di=cneg)
+// per-trial 2x2 tables:
+//   tpos tneg cpos cneg
+//      4  119  11  128
+//      6  300  29  274
+//      3  228  11  209
+//     62 13536 248 12619
+//     33  5036  47  5761
+//    180  1361 372  1079
+//      8  2537  10   619
+//    505 87886 499 87892
+//     29  7470  45  7232
+//     17  1699  65  1600
+//    186 50448 141 27197
+//      5   2493  3  2338
+//     27  16886 29 17825
+//
+// vi = 1/tp - 1/(tp+tn) + 1/cp - 1/(cp+cn)  per Cochrane Handbook §10.4.
+// Earlier vi values in this fixture were ~8-10× too small (origin
+// unknown), causing tau²_DL to come out at 0.486 instead of 0.309.
 global.BCG_DATA = {
-  yi: [-0.8893, -1.5854, -1.3481, -1.4416, -0.2175, -0.7861, -1.6209, 0.0120,
-       -0.4717, -1.4012, -0.3408, 0.4459, -0.0173],
-  vi: [0.0379, 0.0188, 0.0116, 0.0144, 0.0204, 0.0342, 0.0399, 0.0537,
-       0.0731, 0.0072, 0.0138, 0.0177, 0.0283],
+  yi: [-0.889311, -1.585389, -1.348073, -1.441551, -0.217547, -0.786116,
+       -1.620898,  0.011952, -0.469418, -1.371345, -0.339359,  0.445913,
+       -0.017314],
+  vi: [ 0.325585,  0.194581,  0.415368,  0.020010,  0.051210,  0.006906,
+        0.223017,  0.003962,  0.056434,  0.073025,  0.012412,  0.532506,
+        0.071405],
   k: 13,
-  // Expected values from R metafor
+  // Expected values from R metafor's rma(yi, vi, method=...) on the
+  // canonical inputs above.
   expected: {
-    pooled_FE: -0.7145,
-    pooled_RE_DL: -0.7452,
+    pooled_FE: -0.4361,
+    pooled_RE_DL: -0.7141,
     tau2_DL: 0.3088,
     tau2_REML: 0.3132,
     I2: 92.22,

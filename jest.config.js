@@ -48,8 +48,11 @@ export default {
   // Verbose output
   verbose: true,
 
-  // Test timeout (increased for MCMC tests)
-  testTimeout: 30000,
+  // Test timeout. Bumped to 90s — selection-models grid search +
+  // bayesian MCMC chains both pushed past 30s on Windows. SIGTERM
+  // exit-code 143 ("worker crashed") at the suite level traced back
+  // here: jest hard-killed the worker on any test exceeding 30s.
+  testTimeout: 90000,
 
   // Setup files
   setupFilesAfterEnv: ['./tests/setup.js'],
