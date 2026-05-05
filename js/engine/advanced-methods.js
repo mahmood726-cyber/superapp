@@ -2235,6 +2235,10 @@ export function veveaHedgesSelectionModel(yi, vi, options = {}) {
       se: seUnadj,
       ci: [thetaUnadj - zCrit * seUnadj, thetaUnadj + zCrit * seUnadj]
     },
+    // Top-level alias for the estimated step-function weights —
+    // tests/engine/selection-models.test.js expects result.weights as
+    // an array directly. Historical nested form preserved below.
+    weights: w,
     selectionWeights: {
       estimated: w,
       steps,
