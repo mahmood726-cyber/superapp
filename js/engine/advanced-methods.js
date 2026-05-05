@@ -1554,6 +1554,14 @@ export function copasSelectionModel(yi, vi, options = {}) {
       se: seUnadj,
       ci: [thetaUnadj - z * seUnadj, thetaUnadj + z * seUnadj]
     },
+    // Test contract uses the shorter `selectionParams`; alias both names.
+    selectionParams: {
+      gamma0,
+      gamma0CI: [gamma0Lower, gamma0Upper],
+      gamma1,
+      gamma1CI: [gamma1Lower, gamma1Upper],
+      rho,
+    },
     selectionParameters: {
       gamma0,
       gamma0CI: [gamma0Lower, gamma0Upper],  // Profile likelihood 95% CI
@@ -2009,6 +2017,11 @@ export function threeParameterSelectionModel(yi, vi, options = {}) {
       se: seEta,
       interpretation: `Non-significant studies have ${(eta * 100).toFixed(1)}% probability of selection relative to significant studies`
     },
+    // Top-level alias for the test contract:
+    //   tests/engine/selection-models.test.js expects result.selectionWeight
+    //   (shorthand for the selection parameter eta, which IS the omega weight
+    //   for non-significant studies in 3PSM notation).
+    selectionWeight: eta,
     heterogeneity: {
       tau2,
       tau: Math.sqrt(tau2),
@@ -2024,6 +2037,15 @@ export function threeParameterSelectionModel(yi, vi, options = {}) {
       pValue: pLRT,
       significant: pLRT < 0.05,
       interpretation: pLRT < 0.05 ? 'Evidence of publication selection' : 'No significant evidence of selection'
+    },
+    // Top-level alias for the test contract:
+    //   tests/engine/selection-models.test.js expects result.lrTest
+    //   with .statistic and .pValue. Engine has selectionTest with
+    //   .lrt (lowercase) and .pValue. Build a shimmed object.
+    lrTest: {
+      statistic: lrt,
+      pValue: pLRT,
+      df: 1,
     },
     estimatedMissingStudies: Math.max(0, estimatedMissing),
     nSignificant: nSig,
@@ -4718,6 +4740,25 @@ export function tau2ConfidenceInterval(yi, vi, options = {}) {
       ciUpper = bootstrapTau2s[Math.min(upperIdx, nBoot - 1)];
 
       ciMethod = `Bootstrap (${nBoot} iterations)`;
+      break;
+    }
+
+    case 'WALD': {
+      // Wald CI for tau² — normal-approximation symmetric interval.
+      // Use the closed-form variance of the DL estimator (Biggerstaff &
+      // Tweedie 1997 eq. 2.4):
+      //   var(tau²_DL) = 2 * (k-1) / C²
+      // where C = sumW - sumW2/sumW (already computed above as part of
+      // estimateTau2). Truncate the lower bound at 0.
+      const sumW = wi.reduce((a, b) => a + b, 0);
+      const sumW2 = wi.reduce((a, w) => a + w * w, 0);
+      const C = sumW - sumW2 / sumW;
+      const varTau2 = (C > 0) ? (2 * (k - 1)) / (C * C) : 0;
+      const seTau2 = Math.sqrt(Math.max(0, varTau2));
+      const zCrit = jStat.normal.inv(1 - alpha / 2, 0, 1);
+      ciLower = Math.max(0, tau2 - zCrit * seTau2);
+      ciUpper = tau2 + zCrit * seTau2;
+      ciMethod = 'Wald (normal approximation, Biggerstaff-Tweedie variance)';
       break;
     }
 
