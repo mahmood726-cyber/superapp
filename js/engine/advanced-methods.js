@@ -3293,11 +3293,29 @@ export function bayesianMetaAnalysis(yi, vi, options = {}) {
   // Extract progress callback from options
   const { onProgress = null } = options;
 
+  // Internal helper: both Gibbs and MH samplers return a flat
+  // {mu, tau, tau2, diagnostics, samples, ...} shape, but the public API
+  // contract (and tests/engine/bayesian.test.js) expects the parameter
+  // posteriors wrapped under `posterior` so callers can iterate
+  // Object.entries(result.posterior) cleanly.
+  const _wrap = (raw) => ({
+    posterior: {
+      mu:   raw.mu,
+      tau:  raw.tau,
+      tau2: raw.tau2,
+    },
+    studyEffects: raw.studyEffects || raw.theta || null,
+    diagnostics:  raw.diagnostics,
+    samples:      raw.samples,
+    chainSamples: raw.chainSamples,
+    method:       raw.method,
+  });
+
   // Use Gibbs sampler if requested (faster and better mixing for conjugate case)
   if (sampler.toLowerCase() === 'gibbs') {
-    return gibbsSamplerMeta(yi, vi, {
+    return _wrap(gibbsSamplerMeta(yi, vi, {
       nIter, burnIn, thin, nChains, priorMu, priorTau2, seed, onProgress
-    });
+    }));
   }
 
   const n = yi.length;
@@ -3633,7 +3651,8 @@ export function bayesianMetaAnalysis(yi, vi, options = {}) {
   if (!essOK && ESS_mu >= 100 && ESS_tau >= 100) warnings.push('ESS < 400, consider more iterations for reliable inference');
   if (!gewekeOK) warnings.push('Geweke test failed: chain may not have reached stationarity');
 
-  return {
+  // Build the flat MH-result then wrap for consistent public API
+  const _mhRaw = {
     mu: {
       mean: mean(allSamples.mu),
       median: median(allSamples.mu),
@@ -3698,6 +3717,7 @@ export function bayesianMetaAnalysis(yi, vi, options = {}) {
     chainSamples: chainResults.map(c => c.samples),
     method: 'Bayesian MCMC (Adaptive MH with Gelman-Rubin, Geweke, ESS diagnostics)'
   };
+  return _wrap(_mhRaw);
 }
 
 /**
@@ -12220,7 +12240,8 @@ export function bayesianModelComparison(yi, vi, options = {}) {
   // Calculate DIC (Deviance Information Criterion)
   function calculateDIC(samples) {
     const meanLL = samples.logLik.reduce((a, b) => a + b, 0) / samples.logLik.length;
-    const deviance = -2 * samples.logLik;
+    // samples.logLik is an array; -2 * array coerces to NaN. Map element-wise.
+    const deviance = samples.logLik.map(ll => -2 * ll);
     const meanDeviance = deviance.reduce((a, b) => a + b, 0) / deviance.length;
 
     const thetaMean = samples.theta.reduce((a, b) => a + b, 0) / samples.theta.length;
