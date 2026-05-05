@@ -3298,18 +3298,25 @@ export function bayesianMetaAnalysis(yi, vi, options = {}) {
   // contract (and tests/engine/bayesian.test.js) expects the parameter
   // posteriors wrapped under `posterior` so callers can iterate
   // Object.entries(result.posterior) cleanly.
-  const _wrap = (raw) => ({
-    posterior: {
-      mu:   raw.mu,
-      tau:  raw.tau,
-      tau2: raw.tau2,
-    },
-    studyEffects: raw.studyEffects || raw.theta || null,
-    diagnostics:  raw.diagnostics,
-    samples:      raw.samples,
-    chainSamples: raw.chainSamples,
-    method:       raw.method,
-  });
+  const _wrap = (raw) => {
+    // Provide lowercase `rhat` alias — tests use lowercase (Cochrane /
+    // metafor convention) but the samplers historically used `Rhat`
+    // (Gelman 2014 paper notation). Alias both so callers can use either.
+    const diag = raw.diagnostics ? { ...raw.diagnostics } : {};
+    if (diag.Rhat && !diag.rhat) diag.rhat = diag.Rhat;
+    return {
+      posterior: {
+        mu:   raw.mu,
+        tau:  raw.tau,
+        tau2: raw.tau2,
+      },
+      studyEffects: raw.studyEffects || raw.theta || null,
+      diagnostics:  diag,
+      samples:      raw.samples,
+      chainSamples: raw.chainSamples,
+      method:       raw.method,
+    };
+  };
 
   // Use Gibbs sampler if requested (faster and better mixing for conjugate case)
   if (sampler.toLowerCase() === 'gibbs') {
@@ -4386,7 +4393,7 @@ function estimateTau2EB(yi, vi, maxIter = 100, tol = 1e-8) {
     if (Math.abs(delta) < tol) break;
   }
 
-  return { tau2, method: 'EB (Biggerstaff-Tweedie)' };
+  return { tau2, method: 'EB' };
 }
 
 function estimateTau2GENQ(yi, vi) {
