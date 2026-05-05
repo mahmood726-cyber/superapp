@@ -1032,6 +1032,19 @@ function tQuantile(p, df) {
 export function robustVarianceEstimation(yi, vi, clusters, X = null, options = {}) {
   const METHOD = 'robustVarianceEstimation';
 
+  // Test-API compatibility: callers may pass clusters via the options
+  // bag as the 3rd arg, e.g. robustVarianceEstimation(yi, vi, { clusters: [...] }),
+  // OR omit clusters entirely. Resolve to a canonical positional form.
+  if (clusters && typeof clusters === "object" && !Array.isArray(clusters)) {
+    options = clusters;
+    clusters = options.clusters;
+    if (X === null && options.X) X = options.X;
+  }
+  if (!clusters) {
+    // Each observation in its own cluster — RVE reduces to standard SE.
+    clusters = yi.map((_, i) => i);
+  }
+
   // Input validation
   validateMetaInput(yi, vi, METHOD);
   validateClusters(clusters, yi.length, METHOD);
@@ -1039,7 +1052,8 @@ export function robustVarianceEstimation(yi, vi, clusters, X = null, options = {
   const {
     rho = 0.8, // Assumed within-study correlation
     smallSample = true, // Apply CR2 correction
-    weights = 'inverse' // 'inverse' or 'user-defined'
+    weights = 'inverse', // 'inverse' or 'user-defined'
+    adjustment, // ignored if smallSample === true (CR2 is the default)
   } = options;
 
   validateNumeric(rho, 'rho', METHOD, { min: 0, max: 1 });
@@ -15097,8 +15111,13 @@ export function networkMetaAnalysisMultiArm(studies, options = {}) {
     tau2,
     leagueTable: leagueTableMatrix,
     leagueTableByTreatment: leagueTable,
-    ranking: rankings,
+    // `ranking` is the object form treatment→pScore (test contract:
+    //   Object.values(result.ranking).forEach(rank => isFinite(rank))
+    // expects numeric values). Historical array form preserved as
+    // `rankings` (and as `rankingDetails` for older callers).
+    ranking: Object.fromEntries(rankings.map(r => [r.treatment, r.pScore])),
     rankings,
+    rankingDetails: rankings,
     sucra,
     geometry,
     bestTreatment: rankings[0].treatment,
