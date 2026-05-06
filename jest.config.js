@@ -54,6 +54,15 @@ export default {
   // here: jest hard-killed the worker on any test exceeding 30s.
   testTimeout: 90000,
 
+  // Module isolation — under --runInBand all suites share one node
+  // worker. Without resetModules, ESM module-level state in
+  // advanced-methods.js leaks across suites and selection-models.test.js
+  // sees wrong results (8 failures of 29 tests when run after the other
+  // 6 suites; 0 failures when run alone). resetModules forces a fresh
+  // import graph per test file — fixes the inter-suite leak.
+  resetModules: true,
+  clearMocks: true,
+
   // Setup files
   setupFilesAfterEnv: ['./tests/setup.js'],
 

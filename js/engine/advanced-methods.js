@@ -1324,7 +1324,13 @@ export function copasSelectionModel(yi, vi, options = {}) {
     gamma0Range[0] + (gamma0Range[1] - gamma0Range[0]) * i / (nGrid - 1));
   const gamma1Vals = Array.from({ length: nGrid }, (_, i) =>
     gamma1Range[0] + (gamma1Range[1] - gamma1Range[0]) * i / (nGrid - 1));
-  const rhoVals = [0, 0.3, 0.5, 0.7, 0.9];
+  // rhoVals: must respect rhoRange option so the test contract holds
+  // (selectionParams.rho ≤ rhoRange[1]). Previously hardcoded to
+  // [0, 0.3, 0.5, 0.7, 0.9] which ignored the range — caller passes
+  // rhoRange:[0,0.5] and still saw rho=0.7/0.9 in the grid.
+  const nRho = 5;
+  const rhoVals = Array.from({ length: nRho }, (_, i) =>
+    rhoRange[0] + (rhoRange[1] - rhoRange[0]) * i / (nRho - 1));
 
   for (const g0 of gamma0Vals) {
     for (const g1 of gamma1Vals) {
@@ -1822,11 +1828,38 @@ export function threeParameterSelectionModel(yi, vi, options = {}) {
   const nNonSig = n - nSig;
 
   if (nSig === 0 || nNonSig === 0) {
+    // Degenerate case: 3PSM is unidentifiable — eta has no leverage when
+    // all studies share the same significance class. Fall back to the
+    // unadjusted IV estimate so callers see a complete result and the
+    // selectionWeight=1 / lrTest.significant=false signals "no adjustment".
+    const wiD = vi.map(v => 1 / v);
+    const sumWD = wiD.reduce((a, b) => a + b, 0);
+    const muD = yi.reduce((sum, y, i) => sum + wiD[i] * y, 0) / sumWD;
+    const seD = Math.sqrt(1 / sumWD);
+    const zD = normalQuantile(1 - (1 - level) / 2);
     return {
-      error: 'Need both significant and non-significant studies for 3PSM',
+      adjusted: {
+        estimate: muD,
+        se: seD,
+        ci: [muD - zD * seD, muD + zD * seD],
+        tau2: 0,
+        tau: 0
+      },
+      unadjusted: {
+        estimate: muD,
+        se: seD,
+        ci: [muD - zD * seD, muD + zD * seD]
+      },
+      selectionParameter: { eta: 1, se: NaN, interpretation: 'Unidentifiable — all studies share significance class' },
+      selectionWeight: 1,
+      heterogeneity: { tau2: 0, tau: 0, seTau2: NaN },
+      bias: { absolute: 0, percent: 0 },
+      selectionTest: { lrt: 0, df: 0, pValue: 1, significant: false, interpretation: 'Cannot test selection — all studies same significance class' },
+      lrTest: { statistic: 0, lrt: 0, df: 0, pValue: 1, significant: false },
       nSignificant: nSig,
       nNonSignificant: nNonSig,
-      estimate: NaN
+      degenerate: true,
+      note: 'Need both significant and non-significant studies for 3PSM; returned unadjusted estimate'
     };
   }
 
