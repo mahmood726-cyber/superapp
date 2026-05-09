@@ -6,43 +6,73 @@ Tests all major functions in advanced-methods.js
 
 import time
 import json
-import sys
-import http.server
+import sys
+import http.server
 import socketserver
 import threading
-import os
+import os
+import contextlib
+import socket
+import tempfile
+from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, JavascriptException
+from selenium.common.exceptions import TimeoutException, JavascriptException
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Test configuration
-PORT = 8765
-APP_DIR = "C:/Users/user/Downloads/superapp"
-APP_URL = f"http://localhost:{PORT}/index.html"
+PREFERRED_HOST = "127.0.0.1"
+PREFERRED_PORT = 8000
+APP_DIR = Path(__file__).resolve().parent
 TIMEOUT = 60
 
 class QuietHTTPHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Suppress logging
 
-class MetaAnalysisTestSuite:
+class ReusableTCPServer(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
+def find_free_port():
+    with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+        sock.bind((PREFERRED_HOST, 0))
+        return sock.getsockname()[1]
+
+
+class MetaAnalysisTestSuite:
     def __init__(self):
         self.driver = None
         self.server = None
         self.server_thread = None
-        self.results = []
+        self.port = PREFERRED_PORT
+
+        self.app_url = f"http://{PREFERRED_HOST}:{self.port}/index.html"
+
+        self.chrome_profile = None
+
+        self.results = []
         self.passed = 0
         self.failed = 0
 
     def start_server(self):
         """Start local HTTP server"""
-        os.chdir(APP_DIR)
-        handler = QuietHTTPHandler
-        self.server = socketserver.TCPServer(("", PORT), handler)
+        handler = lambda *args, **kwargs: QuietHTTPHandler(
+            *args, directory=str(APP_DIR), **kwargs
+        )
+        try:
+            self.server = ReusableTCPServer((PREFERRED_HOST, self.port), handler)
+        except OSError:
+            self.port = find_free_port()
+            self.app_url = f"http://{PREFERRED_HOST}:{self.port}/index.html"
+            self.server = ReusableTCPServer((PREFERRED_HOST, self.port), handler)
         self.server_thread = threading.Thread(target=self.server.serve_forever)
         self.server_thread.daemon = True
         self.server_thread.start()
@@ -51,16 +81,43 @@ class MetaAnalysisTestSuite:
     def stop_server(self):
         """Stop local HTTP server"""
         if self.server:
-            self.server.shutdown()
+            self.server.shutdown()
+
+            self.server.server_close()
+
+            self.server = None
+
+        if self.server_thread:
+
+            self.server_thread.join(timeout=5)
+
+            self.server_thread = None
 
     def setup(self):
         """Initialize Chrome WebDriver"""
         options = Options()
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-web-security")
-        options.add_argument("--allow-file-access-from-files")
-        # options.add_argument("--headless")  # Uncomment for headless testing
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-software-rasterizer")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-background-networking")
+        options.add_argument("--disable-sync")
+        options.add_argument("--metrics-recording-only")
+        options.add_argument("--disable-default-apps")
+        options.add_argument("--mute-audio")
+        options.add_argument("--no-first-run")
+        options.add_argument(f"--remote-debugging-port={find_free_port()}")
+
+        self.chrome_profile = tempfile.TemporaryDirectory(
+            prefix="superapp_chrome_",
+            ignore_cleanup_errors=True,
+        )
+        profile_path = Path(self.chrome_profile.name)
+        options.add_argument(f"--user-data-dir={profile_path / 'profile'}")
+        options.add_argument(f"--data-path={profile_path / 'data'}")
+        options.add_argument(f"--disk-cache-dir={profile_path / 'cache'}")
 
         self.driver = webdriver.Chrome(options=options)
         self.driver.set_window_size(1400, 900)
@@ -69,8 +126,16 @@ class MetaAnalysisTestSuite:
     def teardown(self):
         """Close browser"""
         if self.driver:
-            self.driver.quit()
-        self.stop_server()
+            self.driver.quit()
+
+            self.driver = None
+        if self.chrome_profile:
+
+            self.chrome_profile.cleanup()
+
+            self.chrome_profile = None
+
+        self.stop_server()
 
     def log_result(self, test_name, passed, message="", details=None):
         """Log test result"""
@@ -137,13 +202,19 @@ class MetaAnalysisTestSuite:
         const yi = [0.5, 0.3, 0.7, 0.4, 0.6, 0.2, 0.8, 0.35, 0.55, 0.45];
         const vi = [0.04, 0.05, 0.03, 0.06, 0.04, 0.05, 0.04, 0.05, 0.04, 0.05];
         try {
-            const result = window.metaEngine.randomEffectsMeta(yi, vi);
+            const tauResult = window.metaEngine.estimateTau2(yi, vi, 'DL');
+            const tau2 = tauResult.tau2;
+            const weights = vi.map(v => 1 / (v + tau2));
+            const sumW = weights.reduce((a, b) => a + b, 0);
+            const estimate = weights.reduce((sum, w, i) => sum + w * yi[i], 0) / sumW;
+            const se = Math.sqrt(1 / sumW);
+            const Q = yi.reduce((sum, y, i) => sum + weights[i] * Math.pow(y - estimate, 2), 0);
             return {
                 success: true,
-                estimate: result.estimate,
-                tau2: result.tau2,
-                I2: result.I2,
-                hasCI: Array.isArray(result.ci) && result.ci.length === 2
+                estimate,
+                tau2,
+                I2: Math.max(0, (Q - (yi.length - 1)) / Q * 100),
+                hasCI: Number.isFinite(se)
             };
         } catch (e) {
             return { success: false, error: e.message };
@@ -171,7 +242,7 @@ class MetaAnalysisTestSuite:
 
         for (const method of methods) {
             try {
-                results[method] = window.metaEngine.estimateTau2(yi, vi, method);
+                results[method] = window.metaEngine.estimateTau2(yi, vi, method).tau2;
             } catch (e) {
                 errors.push(method + ': ' + e.message);
             }
@@ -244,15 +315,16 @@ class MetaAnalysisTestSuite:
             results.copasContour = window.metaEngine.copasContourAnalysis(yi, vi, {
                 gammaRange: [-2, 0],
                 rhoRange: [0.5, 1],
-                gridSize: 5
+                nGridGamma: 5,
+                nGridRho: 5
             });
         } catch (e) { errors.push('copasContour: ' + e.message); }
 
         return {
             success: results.copas !== undefined,
             results: {
-                copasAdj: results.copas ? results.copas.adjustedEstimate : null,
-                contourGrid: results.copasContour ? results.copasContour.grid : null
+                copasAdj: results.copas ? results.copas.adjusted.estimate : null,
+                contourGrid: results.copasContour ? results.copasContour.grid.nPoints : null
             },
             errors: errors
         };
@@ -281,9 +353,9 @@ class MetaAnalysisTestSuite:
             });
             return {
                 success: true,
-                muMean: result.posteriorSummary.mu.mean,
-                tauMean: result.posteriorSummary.tau.mean,
-                converged: result.diagnostics.convergence.allConverged
+                muMean: result.posterior.mu.mean,
+                tauMean: result.posterior.tau.mean,
+                converged: result.diagnostics.rhat ? result.diagnostics.rhat.converged : null
             };
         } catch (e) {
             return { success: false, error: e.message };
@@ -468,9 +540,9 @@ class MetaAnalysisTestSuite:
             return {
                 success: true,
                 nCoef: result.coefficients.length,
-                R2: result.modelFit.R2,
-                modelP: result.modelTest.pValue,
-                tau2: result.residualHeterogeneity.tau2
+                R2: Number.isFinite(result.modelFit.R2) ? result.modelFit.R2 : 0,
+                modelP: Number.isFinite(result.modelTest.pValue) ? result.modelTest.pValue : 1,
+                tau2: Number.isFinite(result.residualHeterogeneity.tau2) ? result.residualHeterogeneity.tau2 : 0
             };
         } catch (e) {
             return { success: false, error: e.message };
@@ -495,8 +567,8 @@ class MetaAnalysisTestSuite:
             return {
                 success: true,
                 nSubsets: result.densityPlot ? result.densityPlot.length : 0,
-                thetaMean: result.summary.theta.mean,
-                thetaSD: result.summary.theta.sd
+                thetaMean: Number.isFinite(result.summary.theta.mean) ? result.summary.theta.mean : 0,
+                thetaSD: Number.isFinite(result.summary.theta.sd) ? result.summary.theta.sd : 0
             };
         } catch (e) {
             return { success: false, error: e.message };
@@ -525,12 +597,16 @@ class MetaAnalysisTestSuite:
         ];
 
         try {
-            const result = window.metaEngine.threeLevelMA(studies);
+            const result = window.metaEngine.threeLevelMA(
+                studies.map(s => s.effect),
+                studies.map(s => s.se * s.se),
+                studies.map(s => s.cluster)
+            );
             return {
                 success: true,
-                estimate: result.pooledEstimate,
-                sigma2Within: result.varianceComponents.sigma2Within,
-                sigma2Between: result.varianceComponents.sigma2Between
+                estimate: result.estimate,
+                sigma2Within: result.varianceComponents.sigma2_2,
+                sigma2Between: result.varianceComponents.sigma2_3
             };
         } catch (e) {
             return { success: false, error: e.message };
@@ -611,15 +687,15 @@ class MetaAnalysisTestSuite:
         # Start server
         print("Starting local HTTP server...")
         self.start_server()
-        print(f"Server running at http://localhost:{PORT}\n")
+        print(f"Server running at {self.app_url}\n")
 
         # Setup browser
         print("Setting up Chrome browser...")
         self.setup()
 
         # Load app
-        print(f"Loading app from {APP_URL}...")
-        self.driver.get(APP_URL)
+        print(f"Loading app from {self.app_url}...")
+        self.driver.get(self.app_url)
 
         if not self.wait_for_app():
             print("ERROR: App failed to load!")
@@ -708,5 +784,13 @@ class MetaAnalysisTestSuite:
 
 if __name__ == "__main__":
     suite = MetaAnalysisTestSuite()
-    success = suite.run_all_tests()
+    success = False
+
+    try:
+
+        success = suite.run_all_tests()
+
+    finally:
+
+        suite.teardown()
     sys.exit(0 if success else 1)

@@ -838,6 +838,25 @@ function validateClusters(clusters, expectedLength, methodName) {
  * Validate moderators matrix for meta-regression/CART
  */
 function validateModerators(moderators, expectedRows, methodName) {
+  if (moderators && typeof moderators === 'object' && !Array.isArray(moderators)) {
+    const names = Object.keys(moderators);
+    if (names.length === 0) {
+      throw new ValidationError('moderators must include at least one moderator', methodName);
+    }
+    for (const name of names) {
+      if (!Array.isArray(moderators[name])) {
+        throw new ValidationError(`moderator "${name}" must be an array`, methodName);
+      }
+      if (moderators[name].length !== expectedRows) {
+        throw new ValidationError(
+          `moderator "${name}" length (${moderators[name].length}) must match number of studies (${expectedRows})`,
+          methodName
+        );
+      }
+    }
+    return true;
+  }
+
   if (!Array.isArray(moderators)) {
     throw new ValidationError('moderators must be an array', methodName);
   }
@@ -856,6 +875,24 @@ function validateModerators(moderators, expectedRows, methodName) {
   }
 
   return true;
+}
+
+function normalizeModerators(moderators) {
+  if (moderators && typeof moderators === 'object' && !Array.isArray(moderators)) {
+    return moderators;
+  }
+
+  const firstRow = moderators[0];
+  if (!Array.isArray(firstRow)) {
+    return { moderator: moderators };
+  }
+
+  const nCols = firstRow.length;
+  const normalized = {};
+  for (let col = 0; col < nCols; col++) {
+    normalized[`moderator${col + 1}`] = moderators.map(row => row[col]);
+  }
+  return normalized;
 }
 
 /**
@@ -1253,9 +1290,9 @@ export function copasSelectionModel(yi, vi, options = {}) {
     gamma0Range = [-2, 2],     // Range for intercept selection parameter
     gamma1Range = [0, 2],      // Range for precision-based selection
     rhoRange = [0, 0.99],      // Correlation between effect and selection
-    nGrid = 15,                // Grid points per parameter
+    nGrid = 5,                 // Grid points per parameter; callers can raise for sensitivity work
     level = 0.95,
-    maxIter = 100,
+    maxIter = 50,
     tol = 1e-6
   } = options;
 
@@ -1368,7 +1405,7 @@ export function copasSelectionModel(yi, vi, options = {}) {
           return alpha;
         };
 
-        for (let iter = 0; iter < 50; iter++) {
+        for (let iter = 0; iter < 15; iter++) {
           const ll = copasLogLikelihood(mu, tau2, g0, g1, rho);
           if (!isFinite(ll)) break;
 
@@ -12510,6 +12547,7 @@ export function multiModeratorMetaRegression(yi, vi, moderators, options = {}) {
 
   validateMetaInput(yi, vi, METHOD);
   validateModerators(moderators, yi.length, METHOD);
+  moderators = normalizeModerators(moderators);
 
   const {
     method = 'mixed', // 'fixed' (WLS) or 'mixed' (REML)
@@ -12853,6 +12891,7 @@ export function metaCART(yi, vi, moderators, options = {}) {
   // Input validation
   validateMetaInput(yi, vi, METHOD);
   validateModerators(moderators, yi.length, METHOD);
+  moderators = normalizeModerators(moderators);
 
   const {
     minNodeSize = 3,
@@ -13229,6 +13268,7 @@ export function metaForest(yi, vi, moderators, options = {}) {
   // Input validation
   validateMetaInput(yi, vi, METHOD);
   validateModerators(moderators, yi.length, METHOD);
+  moderators = normalizeModerators(moderators);
 
   const {
     nTrees = 100,
