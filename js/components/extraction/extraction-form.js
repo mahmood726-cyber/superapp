@@ -534,8 +534,8 @@ class ExtractionForm extends HTMLElement {
       display: `HR = ${hr.toFixed(3)} [${ciLower.toFixed(3)}, ${ciUpper.toFixed(3)}]`,
       hr: hr,
       hrCI: [ciLower, ciUpper],
-      totalEvents: parseFloat(tte.totalEvents) || null,
-      totalN: parseFloat(tte.totalN) || null
+      totalEvents: (() => { const v = parseFloat(tte.totalEvents); return Number.isFinite(v) ? v : null; })(),
+      totalN: (() => { const v = parseFloat(tte.totalN); return Number.isFinite(v) ? v : null; })()
     };
   }
 
