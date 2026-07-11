@@ -314,7 +314,11 @@ export function logGamma(x) {
  */
 export function tCDF(t, df) {
   const x = df / (df + t * t);
-  return 1 - 0.5 * betaInc(df / 2, 0.5, x);
+  const prob = 0.5 * betaInc(df / 2, 0.5, x);
+  // betaInc depends only on t^2, so the sign of t must be restored here:
+  // for t >= 0 return the lower-tail CDF, for t < 0 return the upper-tail
+  // complement. Mirrors the correct local copy in js/engine/meta-analysis.js.
+  return t >= 0 ? 1 - prob : prob;
 }
 
 /**
